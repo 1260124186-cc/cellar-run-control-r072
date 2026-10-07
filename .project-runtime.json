@@ -19,6 +19,10 @@
     {
       "workflow_id": "observations-completion",
       "command": "go run ./cmd/fermentctl check observations-completion"
+    },
+    {
+      "workflow_id": "archive-restore",
+      "command": "go run ./cmd/fermentctl check archive-restore"
     }
   ]
 }

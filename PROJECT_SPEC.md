@@ -97,6 +97,38 @@ time, gravity, temperature, optional note, and receipt time.
 - Gravity must not rise more than 0.010 above the immediately preceding value.
 - Observation sequences are contiguous and start at 1.
 
+### Historical Archive
+
+After a cellar leadership change, retired formulas and retired vessels move
+from the daily workspace to an independent historical repository while
+remaining recoverable for audits.
+
+- The archive is a separate repository with its own `archive.json`, revision,
+  mutex, and durable atomic temp-file, fsync, and rename write. It never shares
+  a file or directory with the live snapshot.
+- An archive preview lists, without changing state, every formula and vessel
+  version that would move, the observations carried by closure runs, the index
+  entries that would be removed, and associated references.
+- Retired formulas and retired vessels are archive-eligible. Completed and
+  aborted runs attached to a selected formula or reserved by a selected vessel
+  form a deterministic referential closure and travel with their observations.
+  Runs are never selected directly for archiving.
+- Confirmation first durably writes an endorsement event and any missing
+  immutable entries into history, and only then removes the live objects. If
+  the history write fails, no online object is deleted.
+- Restore previews check current entity ids, normalized formula names, vessel
+  codes, run codes, and every run formula/vessel reference against the live
+  workspace and report stable conflict blockers before anything is written.
+- Restore confirmation applies the whole batch in one live snapshot
+  transaction in dependency order (formulas, vessels, runs); a failure rolls
+  back completely and can never return half of a group.
+- A confirmation carries a token derived from the previewed items, selection,
+  and both repository revisions; a changed workspace invalidates the token.
+- Historical entries are immutable. Archiving the same selection again or
+  restoring the same object or group again has a deterministic result: true
+  no-ops write nothing, and crash-recovery retries are endorsed by a new
+  durable event without duplicating entries or groups.
+
 ## Connected Workflows
 
 ### 1. Formula Approval
@@ -150,6 +182,27 @@ transitions return stable failures without changing persisted state.
 This path crosses HTTP protocol handling, application orchestration, numeric
 domain rules, and snapshot storage.
 
+### 4. Historical Archive And Restore
+
+Public entry points are:
+
+- `POST /v1/archive/preview`
+- `POST /v1/archive/confirm`
+- `GET /v1/archive`
+- `POST /v1/archive/restore/preview`
+- `POST /v1/archive/restore/confirm`
+
+The client previews which retired objects, closure runs, observations, and
+references would move, confirms the copy-then-remove operation, audits the
+historical ledger, and later restores a single object or an entire group after
+the service reports name, code, id, and reference conflicts. Failed history
+writes keep every object online; failed live writes roll the whole restore
+back; stale preview tokens are rejected; and repeated operations have fixed
+results.
+
+This path crosses HTTP protocol handling, application orchestration, the
+independent archive repository, and snapshot storage.
+
 ## Modules
 
 - `cmd/fermentctl`: executable entry point for the HTTP service and bounded
@@ -159,6 +212,8 @@ domain rules, and snapshot storage.
 - `internal/domain`: entities, validation, state transitions, and metrics.
 - `internal/service`: use-case orchestration and revision coordination.
 - `internal/storage`: snapshot repository, atomic replacement, and locking.
+- `internal/archive`: independent historical repository, immutable entries,
+  groups, endorsement events, and atomic replacement.
 - `internal/httpapi`: routing, strict JSON decoding, error mapping, and health.
 - `internal/workflowcheck`: real HTTP workflow checks used by the executable.
 
@@ -168,7 +223,11 @@ The dependency direction is:
 
 `service -> storage`
 
+`service -> archive`
+
 `storage -> domain`
+
+`archive -> domain`
 
 The domain package does not import outer packages.
 
@@ -198,6 +257,10 @@ an in-process mutex. The complete state is encoded, committed to durable
 storage, and then atomically renamed over the target. An update is not
 published in memory unless persistence succeeds.
 
+The configured archive directory contains the independent `archive.json` and
+uses the same temp-file, fsync, and rename discipline with its own mutex. Live
+objects are removed only after the archive commit endorsing them is durable.
+
 Reads use copied values and never expose repository-owned maps or slices. The
 default address is `127.0.0.1:8088`, the request body limit is 1 MiB, and all
 workflow checks use temporary directories.
@@ -217,6 +280,7 @@ behavior, and exit without external services:
 - `go run ./cmd/fermentctl check formula-approval`
 - `go run ./cmd/fermentctl check vessel-run-lifecycle`
 - `go run ./cmd/fermentctl check observations-completion`
+- `go run ./cmd/fermentctl check archive-restore`
 
 ## Scope Limits
 

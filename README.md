@@ -31,12 +31,14 @@ go run ./cmd/fermentctl serve
 ```
 
 The default address is `127.0.0.1:8088`. The default snapshot directory is
-`./data`.
+`./data`. The independent historical archive defaults to `./archive` and is
+kept in a separate directory from the live snapshot.
 
 Environment variables:
 
 - `CELLAR_CONTROL_ADDR`: HTTP listen address.
 - `CELLAR_CONTROL_DATA_DIR`: directory containing `state.json`.
+- `CELLAR_CONTROL_ARCHIVE_DIR`: directory containing the historical `archive.json`.
 
 Example:
 
@@ -56,6 +58,7 @@ internal/domain                entities, validation, transitions, metrics
 internal/httpapi               HTTP routes, JSON decoding, errors
 internal/service               use-case orchestration
 internal/storage               revisioned snapshot persistence
+internal/archive               independent historical archive repository
 internal/workflowcheck         real HTTP production checks
 ```
 
@@ -94,6 +97,22 @@ Run workflow:
 - `POST /v1/runs/{id}/complete`
 - `POST /v1/runs/{id}/abort`
 
+Archive and restore workflow:
+
+- `POST /v1/archive/preview` — show which retired formulas, vessels, closure
+  runs, observations, versions, and index references would move
+- `POST /v1/archive/confirm` — copy the selection into history, then remove it
+- `GET /v1/archive` — audit listing of historical entries, groups, and events
+- `POST /v1/archive/restore/preview` — check name, code, id, and run-reference
+  conflicts and return an executable restore preview
+- `POST /v1/archive/restore/confirm` — restore one object or an entire group
+  atomically
+
+Confirm requests repeat the original selection and the `token` returned by the
+matching preview. Confirms with a stale token are rejected with
+`archive_token_invalid`, so a plan can never be applied after the workspace it
+was computed against changed.
+
 Writes accept an optional `X-Expected-Version` header. Errors use a stable
 shape:
 
@@ -115,6 +134,7 @@ Run each production workflow check separately:
 go run ./cmd/fermentctl check formula-approval
 go run ./cmd/fermentctl check vessel-run-lifecycle
 go run ./cmd/fermentctl check observations-completion
+go run ./cmd/fermentctl check archive-restore
 ```
 
 Each check creates a temporary snapshot directory, starts the real HTTP
@@ -132,6 +152,23 @@ after that operation succeeds.
 On startup, an existing snapshot is decoded and normalized. Unknown or
 conflicting map indexes are not silently invented; invalid JSON or a negative
 revision stops the process before HTTP serving begins.
+
+## Historical Archive
+
+Retired formulas and retired vessels leave the daily workspace only through the
+two-phase archive API. A preview reports every version, observation, and
+associated reference that would travel (completed and aborted runs attached to
+a selected formula or vessel form a referential closure). Confirmation first
+writes an endorsement event and any new immutable entries into the independent
+`archive.json`, and only then deletes the live objects; a failed history write
+leaves everything online.
+
+Restore previews re-check the current normalized formula name, vessel code,
+run code, entity id, and every run reference against the live workspace and
+return blockers with stable codes. Confirmation applies the whole batch inside
+one live snapshot transaction, so a failure cannot restore half of a group.
+Historical entries are immutable: re-archiving an identical object is
+deterministic, and repeating an archive or a restore has a fixed result.
 
 ## Repair-Ready Boundaries
 

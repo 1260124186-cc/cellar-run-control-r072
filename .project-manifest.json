@@ -34,6 +34,11 @@
       "responsibility": "persist and load revisioned JSON snapshots atomically"
     },
     {
+      "id": "archive",
+      "path": "internal/archive",
+      "responsibility": "independent historical repository with its own ledger, groups, and durable atomic writes"
+    },
+    {
       "id": "httpapi",
       "path": "internal/httpapi",
       "responsibility": "route HTTP requests and map protocol errors"
@@ -112,6 +117,27 @@
         "service",
         "domain",
         "storage"
+      ]
+    },
+    {
+      "id": "archive-restore",
+      "name": "Preview, archive to the historical repository, conflict-check, and restore a group",
+      "entry": "POST /v1/archive/preview",
+      "steps": [
+        "preview which retired formulas, vessels, closure runs, and observations would move",
+        "confirm only after history is durably written, then remove live objects",
+        "restore a group after checking live names, codes, ids, and run references",
+        "verify failed history and failed live writes leave no partial state"
+      ],
+      "success": "the group is restored with observations and metrics intact and repeated operations are deterministic",
+      "failure": "blocked previews, stale tokens, and storage faults return stable errors without partial writes",
+      "verification": "the check issues real HTTP requests and injects storage faults in both repositories",
+      "module_ids": [
+        "httpapi",
+        "service",
+        "domain",
+        "storage",
+        "archive"
       ]
     }
   ]

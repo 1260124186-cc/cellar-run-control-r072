@@ -23,6 +23,15 @@ const (
 	CodeObservationConflict Code = "observation_conflict"
 	CodeRevisionConflict    Code = "revision_conflict"
 	CodeStorage             Code = "storage_error"
+
+	CodeArchiveNotConfigured Code = "archive_not_configured"
+	CodeArchiveEntryNotFound Code = "archive_entry_not_found"
+	CodeArchiveNotRetired    Code = "object_not_retired"
+	CodeArchiveReference     Code = "archive_reference_broken"
+	CodeArchiveBlocked       Code = "archive_not_executable"
+	CodeRestoreConflict      Code = "restore_conflict"
+	CodeRestoreBlocked       Code = "restore_not_executable"
+	CodePlanTokenInvalid     Code = "archive_token_invalid"
 )
 
 type Error struct {

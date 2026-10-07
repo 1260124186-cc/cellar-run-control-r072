@@ -3,14 +3,16 @@ package service
 import (
 	"strings"
 
+	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/archive"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/clock"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/storage"
 )
 
 type Service struct {
-	store *storage.Store
-	clock clock.Clock
+	store    *storage.Store
+	archives *archive.Store
+	clock    clock.Clock
 }
 
 func New(store *storage.Store, timeSource clock.Clock) *Service {
@@ -18,6 +20,13 @@ func New(store *storage.Store, timeSource clock.Clock) *Service {
 		timeSource = clock.System{}
 	}
 	return &Service{store: store, clock: timeSource}
+}
+
+// WithArchive attaches the independent historical repository. It is intended
+// to be called once during process wiring before requests are served.
+func (s *Service) WithArchive(archives *archive.Store) *Service {
+	s.archives = archives
+	return s
 }
 
 func (s *Service) Revision() int64 {
