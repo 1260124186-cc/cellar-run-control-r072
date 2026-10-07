@@ -22,6 +22,9 @@ const (
 	CodeRunState            Code = "invalid_run_state"
 	CodeObservationConflict Code = "observation_conflict"
 	CodeRevisionConflict    Code = "revision_conflict"
+	CodeArchiveEntryMissing Code = "archive_entry_not_found"
+	CodeArchiveConflict     Code = "archive_conflict"
+	CodeArchiveReference    Code = "archive_reference_conflict"
 	CodeStorage             Code = "storage_error"
 )
 

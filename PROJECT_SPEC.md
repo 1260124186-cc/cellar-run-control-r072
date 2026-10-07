@@ -150,15 +150,40 @@ transitions return stable failures without changing persisted state.
 This path crosses HTTP protocol handling, application orchestration, numeric
 domain rules, and snapshot storage.
 
+### 4. Archive And Restore
+
+Public entry points are:
+
+- `POST /v1/archive/preview`
+- `POST /v1/archive/confirm`
+- `GET /v1/archive/entries`
+- `GET /v1/archive/entries/{id}`
+- `POST /v1/archive/restore/preview`
+- `POST /v1/archive/restore/confirm`
+
+Retired formulas (with their terminal runs and observations), retired
+vessels, and terminal runs move from the workspace into an independent
+archive repository stored next to `state.json` as `archive.json`. The
+preview lists the versions, observation counts, and references each entry
+will carry; confirm copies the entry to the history area before removing it
+from the workspace. Restore previews check live names, codes, and run
+references and report conflicts; a conflicting confirm changes nothing.
+Entry identifiers are derived from the archived content, so repeated
+archives and repeated restores converge on a deterministic result, and a
+failure in either direction never deletes live objects or restores half of
+an entry.
+
 ## Modules
 
 - `cmd/fermentctl`: executable entry point for the HTTP service and bounded
   workflow checks.
 - `internal/config`: environment and command-line configuration.
 - `internal/clock`: deterministic clock boundary for production and checks.
-- `internal/domain`: entities, validation, state transitions, and metrics.
+- `internal/domain`: entities, validation, state transitions, metrics, and
+  archive entry identity.
 - `internal/service`: use-case orchestration and revision coordination.
-- `internal/storage`: snapshot repository, atomic replacement, and locking.
+- `internal/storage`: snapshot repository, archive repository, atomic
+  replacement, and locking.
 - `internal/httpapi`: routing, strict JSON decoding, error mapping, and health.
 - `internal/workflowcheck`: real HTTP workflow checks used by the executable.
 
@@ -193,10 +218,15 @@ rejects a stale write instead of overwriting newer state.
 
 ## Persistence And Concurrency
 
-The configured data directory contains `state.json`. Writes are serialized by
-an in-process mutex. The complete state is encoded, committed to durable
-storage, and then atomically renamed over the target. An update is not
-published in memory unless persistence succeeds.
+The configured data directory contains `state.json` for the workspace and
+`archive.json` for the history area. Writes are serialized by in-process
+mutexes. The complete state is encoded, committed to durable storage, and
+then atomically renamed over the target. An update is not published in
+memory unless persistence succeeds. Archive and restore confirms write the
+two repositories in a defined order under one serializer: archive copies to
+the history area before removing live objects, and restore completes the
+workspace transaction before dropping archive entries, so an interrupted
+confirm is always safe to retry.
 
 Reads use copied values and never expose repository-owned maps or slices. The
 default address is `127.0.0.1:8088`, the request body limit is 1 MiB, and all
@@ -210,13 +240,14 @@ task owns systematic tests for validation boundaries, state transitions,
 numeric calculations, stale revisions, storage failures, and concurrent
 reservation attempts.
 
-The current build command is `go build ./...`. Three bounded production checks
+The current build command is `go build ./...`. Four bounded production checks
 start the real HTTP handler, issue real JSON requests, check success and failure
 behavior, and exit without external services:
 
 - `go run ./cmd/fermentctl check formula-approval`
 - `go run ./cmd/fermentctl check vessel-run-lifecycle`
 - `go run ./cmd/fermentctl check observations-completion`
+- `go run ./cmd/fermentctl check archive-restore`
 
 ## Scope Limits
 

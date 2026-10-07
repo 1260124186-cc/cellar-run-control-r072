@@ -2,6 +2,7 @@ package service
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/clock"
 	"github.com/1260124186-cc/solo-0016-cellar-run-control/internal/domain"
@@ -9,15 +10,20 @@ import (
 )
 
 type Service struct {
-	store *storage.Store
-	clock clock.Clock
+	store   *storage.Store
+	archive *storage.ArchiveStore
+	clock   clock.Clock
+	// archiveMu serializes archive and restore confirms. Each confirm writes
+	// to two repositories in a defined order, so concurrent confirms must not
+	// interleave.
+	archiveMu sync.Mutex
 }
 
-func New(store *storage.Store, timeSource clock.Clock) *Service {
+func New(store *storage.Store, archive *storage.ArchiveStore, timeSource clock.Clock) *Service {
 	if timeSource == nil {
 		timeSource = clock.System{}
 	}
-	return &Service{store: store, clock: timeSource}
+	return &Service{store: store, archive: archive, clock: timeSource}
 }
 
 func (s *Service) Revision() int64 {

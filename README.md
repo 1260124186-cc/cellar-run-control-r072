@@ -94,6 +94,27 @@ Run workflow:
 - `POST /v1/runs/{id}/complete`
 - `POST /v1/runs/{id}/abort`
 
+Archive workflow:
+
+- `POST /v1/archive/preview`
+- `POST /v1/archive/confirm`
+- `GET /v1/archive/entries`
+- `GET /v1/archive/entries/{id}`
+- `POST /v1/archive/restore/preview`
+- `POST /v1/archive/restore/confirm`
+
+The archive is an independent history repository stored in
+`<data-directory>/archive.json`. Archiving moves retired formulas (together
+with their terminal runs and every observation), retired vessels, and
+terminal runs out of the daily workspace. The preview shows exactly which
+versions, observation counts, and references each entry will carry before
+anything is confirmed. Restore previews check live formula names, vessel and
+run codes, and run references for conflicts; a conflicting confirm is
+rejected without changing state. Confirms are atomic and idempotent: a
+failed archive never deletes live objects, a failed restore never returns
+half of an entry, and repeating an archive or restore request converges on
+the same result.
+
 Writes accept an optional `X-Expected-Version` header. Errors use a stable
 shape:
 
@@ -115,6 +136,7 @@ Run each production workflow check separately:
 go run ./cmd/fermentctl check formula-approval
 go run ./cmd/fermentctl check vessel-run-lifecycle
 go run ./cmd/fermentctl check observations-completion
+go run ./cmd/fermentctl check archive-restore
 ```
 
 Each check creates a temporary snapshot directory, starts the real HTTP

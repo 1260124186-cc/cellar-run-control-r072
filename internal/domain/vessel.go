@@ -23,6 +23,15 @@ type Vessel struct {
 	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
+func (v Vessel) Clone() Vessel {
+	cloned := v
+	if v.ActiveRunID != nil {
+		value := *v.ActiveRunID
+		cloned.ActiveRunID = &value
+	}
+	return cloned
+}
+
 func (v Vessel) Validate() error {
 	if err := ValidateVesselCode(v.Code, "code"); err != nil {
 		return err
